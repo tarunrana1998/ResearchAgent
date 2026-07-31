@@ -148,9 +148,15 @@ html, body, [class*="css"] {
     overflow: hidden;
     transition: border-color 0.3s;
 }
+@keyframes pulseGlow {
+    0% { box-shadow: 0 0 0 0 rgba(255,140,50,0.2); }
+    70% { box-shadow: 0 0 0 10px rgba(255,140,50,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,140,50,0); }
+}
 .step-card.active {
-    border-color: rgba(255,140,50,0.4);
-    background: rgba(255,140,50,0.04);
+    border-color: rgba(255,140,50,0.6);
+    background: rgba(255,140,50,0.06);
+    animation: pulseGlow 2s infinite;
 }
 .step-card.done {
     border-color: rgba(80,200,120,0.3);
@@ -293,7 +299,7 @@ details summary {
 
 
 # ── Helper: render a step card ────────────────────────────────────────────────
-def step_card(num: str, title: str, state: str, desc: str = ""):
+def step_card(num: str, title: str, state: str, desc: str = "") -> str:
     status_map = {
         "waiting": ("WAITING", "status-waiting"),
         "running": ("● RUNNING", "status-running"),
@@ -301,7 +307,7 @@ def step_card(num: str, title: str, state: str, desc: str = ""):
     }
     label, cls = status_map.get(state, ("", ""))
     card_cls = {"running": "active", "done": "done"}.get(state, "")
-    st.markdown(f"""
+    return f"""
     <div class="step-card {card_cls}">
         <div class="step-header">
             <span class="step-num">{num}</span>
@@ -310,7 +316,7 @@ def step_card(num: str, title: str, state: str, desc: str = ""):
         </div>
         {"<div style='font-size:0.82rem;color:#706860;margin-top:0.3rem;'>"+desc+"</div>" if desc else ""}
     </div>
-    """, unsafe_allow_html=True)
+    """
 
 
 # ── Session state init ────────────────────────────────────────────────────────
@@ -373,19 +379,27 @@ with col_pipeline:
 
     r = st.session_state.results
 
-    def step_state(key: str) -> str:
-        """Derive a step's UI state from what has completed so far."""
-        if key in r:
-            return "done"
-        if st.session_state.running:
-            # The running step is the first one without a result yet.
-            for step in STEPS:
-                if step["key"] not in r:
-                    return "running" if step["key"] == key else "waiting"
-        return "waiting"
+    step_placeholders = {step["key"]: st.empty() for step in STEPS}
 
-    for step in STEPS:
-        step_card(step["num"], step["title"], step_state(step["key"]), step["desc"])
+    def update_step_cards():
+        r_state = st.session_state.results
+        for i, step in enumerate(STEPS):
+            key = step["key"]
+            if key in r_state:
+                state = "done"
+            elif st.session_state.running:
+                # Check if all previous steps are done
+                prev_all_done = all(STEPS[j]["key"] in r_state for j in range(i))
+                state = "running" if prev_all_done else "waiting"
+            else:
+                state = "waiting"
+            
+            step_placeholders[key].markdown(
+                step_card(step["num"], step["title"], state, step["desc"]), 
+                unsafe_allow_html=True
+            )
+
+    update_step_cards()
 
 
 # ── Run pipeline ──────────────────────────────────────────────────────────────
@@ -403,16 +417,14 @@ if st.session_state.running and not st.session_state.done:
     topic_val = st.session_state.topic_input
 
     try:
-        # Loop over the generator and update UI state for each step
+        # Update placeholders initially so the first card says "RUNNING"
+        update_step_cards()
+        
         for step_key, content in stream_research_pipeline(topic_val):
-            # Find the title for the loading spinner
-            title = next((s["title"] for s in STEPS if s["key"] == step_key), step_key.title())
-            
-            with st.spinner(f"⏳ {title} is working…"):
-                results[step_key] = content
-                st.session_state.results = dict(results)
-                
-            # Yield control back to streamlit to update UI (optional but good for reactivity if using fragments)
+            results[step_key] = content
+            st.session_state.results = dict(results)
+            # Update placeholders so the card switches from RUNNING to DONE in real-time
+            update_step_cards()
             
     except Exception as e:
         st.error(f"Error during execution: {e}")
@@ -420,6 +432,8 @@ if st.session_state.running and not st.session_state.done:
     finally:
         st.session_state.running = False
         st.session_state.done = True
+        st.toast("Research complete!", icon="🎉")
+        st.balloons()
         st.rerun()
 
 
@@ -430,42 +444,42 @@ if r:
     st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
     st.markdown('<div class="section-heading">Results</div>', unsafe_allow_html=True)
 
-    # Raw outputs in expanders
-    if "search" in r:
-        with st.expander("🔍 Search Results (raw)", expanded=False):
-            st.markdown(f'<div class="result-panel"><div class="result-panel-title">Search Agent Output</div>'
-                        f'<div class="result-content">{r["search"]}</div></div>', unsafe_allow_html=True)
-
-    if "reader" in r:
-        with st.expander("📄 Scraped Content (raw)", expanded=False):
-            st.markdown(f'<div class="result-panel"><div class="result-panel-title">Reader Agent Output</div>'
-                        f'<div class="result-content">{r["reader"]}</div></div>', unsafe_allow_html=True)
-
-    # Final report
-    if "writer" in r:
-        st.markdown("""
-        <div class="report-panel">
-            <div class="panel-label orange">📝 Final Research Report</div>
-        """, unsafe_allow_html=True)
-        st.markdown(r["writer"])   # render markdown natively
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # Download
-        st.download_button(
-            label="⬇  Download Report (.md)",
-            data=r["writer"],
-            file_name=f"research_report_{int(time.time())}.md",
-            mime="text/markdown",
-        )
-
-    # Critic feedback
-    if "critic" in r:
-        st.markdown("""
-        <div class="feedback-panel">
-            <div class="panel-label green">🧐 Critic Feedback</div>
-        """, unsafe_allow_html=True)
-        st.markdown(r["critic"])
-        st.markdown("</div>", unsafe_allow_html=True)
+    tabs = st.tabs(["📝 Final Report", "🧐 Critic Feedback", "🕵️‍♂️ Raw Data"])
+    
+    with tabs[0]:
+        if "writer" in r:
+            st.markdown("""
+            <div class="report-panel">
+                <div class="panel-label orange">📝 Final Research Report</div>
+            """, unsafe_allow_html=True)
+            st.markdown(r["writer"])
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+            st.download_button(
+                label="⬇  Download Report (.md)",
+                data=r["writer"],
+                file_name=f"research_report_{int(time.time())}.md",
+                mime="text/markdown",
+            )
+    
+    with tabs[1]:
+        if "critic" in r:
+            st.markdown("""
+            <div class="feedback-panel">
+                <div class="panel-label green">🧐 Critic Feedback</div>
+            """, unsafe_allow_html=True)
+            st.markdown(r["critic"])
+            st.markdown("</div>", unsafe_allow_html=True)
+            
+    with tabs[2]:
+        if "search" in r:
+            with st.expander("🔍 Search Results (raw)", expanded=False):
+                st.markdown(f'<div class="result-panel"><div class="result-panel-title">Search Agent Output</div>'
+                            f'<div class="result-content">{r["search"]}</div></div>', unsafe_allow_html=True)
+        if "reader" in r:
+            with st.expander("📄 Scraped Content (raw)", expanded=False):
+                st.markdown(f'<div class="result-panel"><div class="result-panel-title">Reader Agent Output</div>'
+                            f'<div class="result-content">{r["reader"]}</div></div>', unsafe_allow_html=True)
 
 
 # ── Footer ────────────────────────────────────────────────────────────────────

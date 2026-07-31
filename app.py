@@ -339,6 +339,24 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# ── Sidebar Settings ─────────────────────────────────────────────────────────
+with st.sidebar:
+    st.markdown("### ⚙️ Settings")
+    st.markdown("Switch models if you run out of API credits or hit rate limits:")
+    selected_model = st.selectbox(
+        "AI Model",
+        options=[
+            "gemini-2.5-flash-lite", 
+            "gemini-2.5-flash", 
+            "gemini-1.5-flash", 
+            "gemini-1.5-flash-8b", 
+            "gemini-1.5-pro"
+        ],
+        index=0,
+    )
+    st.session_state.selected_model = selected_model
+
+
 # ── Layout: input left, pipeline right ───────────────────────────────────────
 col_input, col_spacer, col_pipeline = st.columns([5, 0.5, 4])
 
@@ -346,7 +364,7 @@ with col_input:
     st.markdown('<div class="input-card">', unsafe_allow_html=True)
     topic = st.text_input(
         "Research Topic",
-        placeholder="e.g. Quantum computing breakthroughs in 2025",
+        placeholder="e.g. Quantum computing breakthroughs in 2026",
         key="topic_input",
         label_visibility="visible",
     )
@@ -358,7 +376,7 @@ with col_input:
     <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1.5rem;">
         <span style="font-family:'DM Mono',monospace;font-size:0.68rem;color:#605850;letter-spacing:0.1em;">TRY →</span>
     """, unsafe_allow_html=True)
-    examples = ["LLM agents 2025", "CRISPR gene editing", "Fusion energy progress"]
+    examples = ["LLM agents 2026", "CRISPR gene editing", "Fusion energy progress"]
     for ex in examples:
         st.markdown(f"""
         <span style="
@@ -420,20 +438,29 @@ if st.session_state.running and not st.session_state.done:
         # Update placeholders initially so the first card says "RUNNING"
         update_step_cards()
         
-        for step_key, content in stream_research_pipeline(topic_val):
+        for step_key, content in stream_research_pipeline(topic_val, st.session_state.get("selected_model")):
             results[step_key] = content
             st.session_state.results = dict(results)
             # Update placeholders so the card switches from RUNNING to DONE in real-time
             update_step_cards()
             
     except Exception as e:
-        st.error(f"Error during execution: {e}")
+        error_msg = str(e).lower()
+        if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg or "rate limit" in error_msg:
+            st.error("⚠️ **API Credit / Rate Limit Exceeded!**")
+            st.warning("You have run out of API credits or hit a rate limit for this specific AI model. Please go to the **⚙️ Settings** sidebar on the left and select a different AI model, then try again.")
+        else:
+            st.error(f"Error during execution: {e}")
+        st.session_state.error = True
         
     finally:
         st.session_state.running = False
         st.session_state.done = True
-        st.toast("Research complete!", icon="🎉")
-        st.balloons()
+        if not st.session_state.get("error"):
+            st.toast("Research complete!", icon="🎉")
+            st.balloons()
+        else:
+            st.session_state.error = False
         st.rerun()
 
 

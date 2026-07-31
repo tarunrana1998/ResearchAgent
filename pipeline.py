@@ -9,7 +9,12 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import config
-from agents import build_reader_agent, build_search_agent, critic_chain, writer_chain
+from agents import (
+    build_critic_chain,
+    build_reader_agent,
+    build_search_agent,
+    build_writer_chain,
+)
 
 # Ordered metadata for each pipeline stage, reused by every front-end.
 STEPS = [
@@ -25,7 +30,7 @@ def _last_message(result: dict) -> str:
     return result["messages"][-1].content
 
 
-def stream_research_pipeline(topic: str) -> Iterator[tuple[str, str]]:
+def stream_research_pipeline(topic: str, model_name: str = None) -> Iterator[tuple[str, str]]:
     """Run the pipeline, yielding ``(step_key, content)`` after each stage.
 
     Consumers can render progress live. Raises if required API keys are missing.
@@ -35,16 +40,14 @@ def stream_research_pipeline(topic: str) -> Iterator[tuple[str, str]]:
     topic = topic.strip()
     state: dict[str, str] = {}
 
-    # ── Step 1: Search ──
-    search_agent = build_search_agent()
+    search_agent = build_search_agent(model_name)
     search_result = search_agent.invoke(
         {"messages": [("user", f"Find recent, reliable and detailed information about: {topic}")]}
     )
     state["search"] = _last_message(search_result)
     yield "search", state["search"]
 
-    # ── Step 2: Reader ──
-    reader_agent = build_reader_agent()
+    reader_agent = build_reader_agent(model_name)
     reader_result = reader_agent.invoke(
         {
             "messages": [
@@ -65,10 +68,12 @@ def stream_research_pipeline(topic: str) -> Iterator[tuple[str, str]]:
         f"SEARCH RESULTS:\n{state['search']}\n\n"
         f"DETAILED SCRAPED CONTENT:\n{state['reader']}"
     )
+    writer_chain = build_writer_chain(model_name)
     state["writer"] = writer_chain.invoke({"topic": topic, "research": research_combined})
     yield "writer", state["writer"]
 
     # ── Step 4: Critic ──
+    critic_chain = build_critic_chain(model_name)
     state["critic"] = critic_chain.invoke({"report": state["writer"]})
     yield "critic", state["critic"]
 

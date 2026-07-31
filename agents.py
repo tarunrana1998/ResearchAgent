@@ -6,22 +6,24 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 import config
 from tools import scrape_url, web_search
 
-#model setup
-llm = ChatGoogleGenerativeAI(model=config.LLM_MODEL, temperature=config.LLM_TEMPERATURE)
+
+def get_llm(model_name: str = None):
+    model = model_name or config.LLM_MODEL
+    return ChatGoogleGenerativeAI(model=model, temperature=config.LLM_TEMPERATURE)
 
 
 #1st agent 
-def build_search_agent():
+def build_search_agent(model_name: str = None):
     return create_agent(
-        model = llm,
+        model = get_llm(model_name),
         tools= [web_search]
     )
 
 #2nd agent 
 
-def build_reader_agent():
+def build_reader_agent(model_name: str = None):
     return create_agent(
-        model = llm,
+        model = get_llm(model_name),
         tools = [scrape_url]
     )
 
@@ -46,7 +48,8 @@ Structure the report as:
 Be detailed, factual and professional."""),
 ])
 
-writer_chain = writer_prompt | llm | StrOutputParser()
+def build_writer_chain(model_name: str = None):
+    return writer_prompt | get_llm(model_name) | StrOutputParser()
 
 #critic_chain 
 
@@ -73,4 +76,5 @@ One line verdict:
 ..."""),
 ])
 
-critic_chain = critic_prompt | llm | StrOutputParser()
+def build_critic_chain(model_name: str = None):
+    return critic_prompt | get_llm(model_name) | StrOutputParser()

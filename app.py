@@ -339,24 +339,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ── Sidebar Settings ─────────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown("### ⚙️ Settings")
-    st.markdown("Switch models if you run out of API credits or hit rate limits:")
-    selected_model = st.selectbox(
-        "AI Model",
-        options=[
-            "gemini-2.5-flash-lite", 
-            "gemini-2.5-flash", 
-            "gemini-1.5-flash", 
-            "gemini-1.5-flash-8b", 
-            "gemini-1.5-pro"
-        ],
-        index=0,
-    )
-    st.session_state.selected_model = selected_model
-
-
 # ── Layout: input left, pipeline right ───────────────────────────────────────
 col_input, col_spacer, col_pipeline = st.columns([5, 0.5, 4])
 
@@ -368,6 +350,21 @@ with col_input:
         key="topic_input",
         label_visibility="visible",
     )
+    
+    st.markdown("<div style='height: 0.5rem;'></div>", unsafe_allow_html=True)
+    selected_model = st.selectbox(
+        "AI Model (Switch if rate limited)",
+        options=[
+            "gemini-3.5-flash-lite", 
+            "gemini-3.1-flash-lite", 
+            "gemini-2.5-flash-lite", 
+            "gemini-2.5-flash", 
+        ],
+        index=0,
+    )
+    st.session_state.selected_model = selected_model
+    
+    st.markdown("<div style='height: 1rem;'></div>", unsafe_allow_html=True)
     run_btn = st.button("⚡  Run Research Pipeline", use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 

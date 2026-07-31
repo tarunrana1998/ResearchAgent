@@ -7,6 +7,7 @@ the codebase never has to reach into ``os.environ`` directly.
 from __future__ import annotations
 
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()

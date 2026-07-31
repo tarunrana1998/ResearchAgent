@@ -6,9 +6,7 @@ Streamlit UI share one implementation instead of duplicating the orchestration.
 
 from __future__ import annotations
 
-from typing import Iterator, Tuple
-
-from rich import print
+from collections.abc import Iterator
 
 import config
 from agents import build_reader_agent, build_search_agent, critic_chain, writer_chain
@@ -27,7 +25,7 @@ def _last_message(result: dict) -> str:
     return result["messages"][-1].content
 
 
-def stream_research_pipeline(topic: str) -> Iterator[Tuple[str, str]]:
+def stream_research_pipeline(topic: str) -> Iterator[tuple[str, str]]:
     """Run the pipeline, yielding ``(step_key, content)`` after each stage.
 
     Consumers can render progress live. Raises if required API keys are missing.

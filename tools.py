@@ -9,7 +9,6 @@ import os
 import requests
 from bs4 import BeautifulSoup
 from langchain.tools import tool
-from rich import print
 from tavily import TavilyClient
 
 import config
